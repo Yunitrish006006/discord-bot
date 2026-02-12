@@ -55,6 +55,8 @@ async function handleSlashCommand(interaction, env) {
           return handleSetChannelCommand(interaction, env);
       case CommandNames.REMOVECHANNEL:
           return handleRemoveChannelCommand(interaction, env);
+      case CommandNames.TAG:
+          return handleTagCommand(interaction, env);
     default:
       return Response.json({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -276,6 +278,11 @@ async function handleMessageComponent(interaction, env) {
     const offset = parseInt(customId.replace('players_page_', ''), 10) || 0;
     return buildPlayersResponse(env, offset, true);
   }
+
+    // 身分組選擇按鈕：tag_role_{roleId}
+    if (customId.startsWith('tag_role_')) {
+        return handleTagRoleButton(interaction, env);
+    }
 
   // 重新整理狀態按鈕
   if (customId === 'status_refresh') {
@@ -543,6 +550,158 @@ async function handleRemoveChannelCommand(interaction, env) {
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
                 content: '❌ 移除失敗，請稍後再試',
+                flags: InteractionResponseFlags.EPHEMERAL,
+            },
+        });
+    }
+}
+
+// ===================================================
+// 身分組選擇 (/tag)
+// ===================================================
+
+const ROLE_EMOJIS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
+const ROLE_COLORS = [1, 1, 1, 1, 1]; // All Primary (blurple)
+
+// /tag @role1 @role2 ... — 建立身分組選擇按鈕
+async function handleTagCommand(interaction, env) {
+    const options = interaction.data.options || [];
+    const guildId = interaction.guild_id;
+
+    // 取得 resolved roles（Discord 自動解析的完整 role 資訊）
+    const resolvedRoles = interaction.data.resolved?.roles || {};
+
+    // 收集所有 role options
+    const roles = [];
+    for (const opt of options) {
+        if (opt.name.startsWith('role') && resolvedRoles[opt.value]) {
+            const role = resolvedRoles[opt.value];
+            roles.push({
+                id: opt.value,
+                name: role.name,
+                color: role.color || 0x5865f2,
+            });
+        }
+    }
+
+    if (roles.length === 0) {
+        return Response.json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+                content: '❌ 請至少選擇一個身分組',
+                flags: InteractionResponseFlags.EPHEMERAL,
+            },
+        });
+    }
+
+    // 自訂標題
+    const title = getOptionValue(options, 'title') || '選擇你的身分組';
+
+    // 建立按鈕（每個 role 一個按鈕）
+    const buttons = roles.map((role, i) => ({
+        type: 2,       // Button
+        style: 1,      // Primary
+        label: role.name,
+        emoji: { name: ROLE_EMOJIS[i] },
+        custom_id: `tag_role_${role.id}`,
+    }));
+
+    // 建立 embed 描述
+    const description = roles
+        .map((role, i) => `${ROLE_EMOJIS[i]} — <@&${role.id}>`)
+        .join('\n');
+
+    return Response.json({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+            embeds: [
+                {
+                    title: `🏷️ ${title}`,
+                    description: `點擊下方按鈕來獲得或移除身分組：\n\n${description}`,
+                    color: 0x5865f2,
+                    footer: { text: '再次點擊即可移除身分組' },
+                },
+            ],
+            components: [
+                { type: 1, components: buttons }, // Action Row
+            ],
+        },
+    });
+}
+
+// 處理身分組按鈕點擊（toggle：有 → 移除，沒有 → 新增）
+async function handleTagRoleButton(interaction, env) {
+    const customId = interaction.data.custom_id;
+    const roleId = customId.replace('tag_role_', '');
+    const userId = interaction.member?.user?.id;
+    const guildId = interaction.guild_id;
+
+    if (!userId || !guildId) {
+        return Response.json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+                content: '❌ 無法取得使用者或伺服器資訊',
+                flags: InteractionResponseFlags.EPHEMERAL,
+            },
+        });
+    }
+
+    // 檢查使用者是否已有此身分組
+    const memberRoles = interaction.member?.roles || [];
+    const hasRole = memberRoles.includes(roleId);
+
+    try {
+        const url = `https://discord.com/api/v10/guilds/${guildId}/members/${userId}/roles/${roleId}`;
+        const method = hasRole ? 'DELETE' : 'PUT';
+
+        const res = await fetch(url, {
+            method,
+            headers: {
+                Authorization: `Bot ${env.DISCORD_TOKEN}`,
+                'Content-Type': 'application/json',
+            },
+        });
+
+        if (!res.ok) {
+            const errText = await res.text();
+            console.error(`Failed to ${method} role:`, errText);
+
+            // 常見錯誤：權限不足
+            if (res.status === 403) {
+                return Response.json({
+                    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                    data: {
+                        content: '❌ Bot 權限不足，無法管理此身分組。\n請確認 Bot 的角色位置高於目標身分組。',
+                        flags: InteractionResponseFlags.EPHEMERAL,
+                    },
+                });
+            }
+
+            return Response.json({
+                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: {
+                    content: '❌ 操作失敗，請稍後再試',
+                    flags: InteractionResponseFlags.EPHEMERAL,
+                },
+            });
+        }
+
+        const action = hasRole ? '移除' : '獲得';
+        const emoji = hasRole ? '➖' : '✅';
+
+        return Response.json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+                content: `${emoji} 已${action}身分組 <@&${roleId}>`,
+                flags: InteractionResponseFlags.EPHEMERAL,
+            },
+        });
+    } catch (err) {
+        console.error('handleTagRoleButton error:', err);
+        return Response.json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+                content: '❌ 操作失敗，請稍後再試',
                 flags: InteractionResponseFlags.EPHEMERAL,
             },
         });
