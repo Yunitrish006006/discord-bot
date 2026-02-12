@@ -8,4 +8,4 @@ compatibility_date = "2025-01-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "mc-discord-db"
-database_id = "<YOUR_DATABASE_ID>"
+database_id = "8990cba7-d9d5-42eb-9d2c-d9fb95cfed7a"
