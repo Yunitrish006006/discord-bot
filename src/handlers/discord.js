@@ -41,6 +41,8 @@ async function handleSlashCommand(interaction, env) {
   const commandName = data.name;
 
   switch (commandName) {
+      case CommandNames.TEST:
+          return handleTestCommand(interaction, env);
     case CommandNames.MC:
       return handleMcCommand(interaction, env);
     case CommandNames.STATUS:
@@ -55,6 +57,43 @@ async function handleSlashCommand(interaction, env) {
         data: { content: '❌ 未知的指令', flags: InteractionResponseFlags.EPHEMERAL },
       });
   }
+}
+
+// /test — 測試機器人狀態
+async function handleTestCommand(interaction, env) {
+    const now = new Date();
+
+    // 測試 D1 連線
+    let dbStatus = '🔴 失敗';
+    let dbLatency = 'N/A';
+    try {
+        const dbStart = Date.now();
+        await env.DB.prepare('SELECT 1').first();
+        dbLatency = `${Date.now() - dbStart}ms`;
+        dbStatus = '🟢 正常';
+    } catch (err) {
+        console.error('DB test failed:', err);
+    }
+
+    return Response.json({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: {
+            embeds: [
+                {
+                    title: '🤖 Bot 狀態測試',
+                    color: 0x00ff00,
+                    fields: [
+                        { name: '狀態', value: '🟢 線上', inline: true },
+                        { name: '延遲', value: `${Date.now() - now.getTime()}ms`, inline: true },
+                        { name: 'D1 資料庫', value: `${dbStatus} (${dbLatency})`, inline: true },
+                        { name: '運行環境', value: 'Cloudflare Workers', inline: true },
+                        { name: '時間', value: now.toISOString(), inline: false },
+                    ],
+                },
+            ],
+            flags: InteractionResponseFlags.EPHEMERAL,
+        },
+    });
 }
 
 // /mc <message> — 傳送訊息到 Minecraft

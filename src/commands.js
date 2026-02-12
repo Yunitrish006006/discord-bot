@@ -13,6 +13,7 @@ const CommandOptionType = {
 
 // 指令名稱常數（避免 typo）
 export const CommandNames = {
+    TEST: 'test',
   MC: 'mc',
   STATUS: 'status',
   PLAYERS: 'players',
@@ -22,6 +23,10 @@ export const CommandNames = {
 // 指令定義（供 register.js 使用）
 export const COMMANDS = [
   {
+        name: CommandNames.TEST,
+        description: '測試機器人是否正常運作',
+    },
+    {
     name: CommandNames.MC,
     description: '傳送訊息到 Minecraft 伺服器',
     options: [
