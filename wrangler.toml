@@ -1,0 +1,11 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "mc-discord-bot"
+main = "src/server.js"
+compatibility_date = "2025-01-01"
+
+# D1 Database binding
+# 執行 `npm run db:create` 後，把回傳的 database_id 填入下方
+[[d1_databases]]
+binding = "DB"
+database_name = "mc-discord-db"
+database_id = "<YOUR_DATABASE_ID>"

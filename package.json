@@ -1,0 +1,23 @@
+{
+  "name": "mc-discord-bot",
+  "version": "1.0.0",
+  "description": "Cloudflare Workers Discord Bot with Minecraft integration",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "register": "node register.js",
+    "db:create": "wrangler d1 create mc-discord-db",
+    "db:migrate:local": "wrangler d1 execute mc-discord-db --local --file=./src/db/schema.sql",
+    "db:migrate:remote": "wrangler d1 execute mc-discord-db --remote --file=./src/db/schema.sql"
+  },
+  "dependencies": {
+    "discord-interactions": "^4.1.0",
+    "itty-router": "^5.0.18"
+  },
+  "devDependencies": {
+    "dotenv": "^16.4.7",
+    "wrangler": "^3.99.0"
+  }
+}
