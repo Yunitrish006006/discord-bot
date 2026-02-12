@@ -18,6 +18,8 @@ export const CommandNames = {
   STATUS: 'status',
   PLAYERS: 'players',
   BIND: 'bind',
+    SETCHANNEL: 'setchannel',
+    REMOVECHANNEL: 'removechannel',
 };
 
 // 指令定義（供 register.js 使用）
@@ -58,4 +60,14 @@ export const COMMANDS = [
       },
     ],
   },
+    {
+        name: CommandNames.SETCHANNEL,
+        description: '將目前頻道設為 Minecraft 聊天同步頻道',
+        default_member_permissions: '32', // MANAGE_SERVER
+    },
+    {
+        name: CommandNames.REMOVECHANNEL,
+        description: '移除目前頻道的 Minecraft 聊天同步',
+        default_member_permissions: '32', // MANAGE_SERVER
+    },
 ];

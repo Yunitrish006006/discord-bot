@@ -51,6 +51,10 @@ async function handleSlashCommand(interaction, env) {
       return handlePlayersCommand(interaction, env);
     case CommandNames.BIND:
       return handleBindCommand(interaction, env);
+      case CommandNames.SETCHANNEL:
+          return handleSetChannelCommand(interaction, env);
+      case CommandNames.REMOVECHANNEL:
+          return handleRemoveChannelCommand(interaction, env);
     default:
       return Response.json({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -395,4 +399,152 @@ async function buildPlayersResponse(env, offset, isUpdate = false) {
       },
     });
   }
+}
+
+// ===================================================
+// 頻道同步管理
+// ===================================================
+
+// /setchannel — 將目前頻道設為 MC 聊天同步頻道
+async function handleSetChannelCommand(interaction, env) {
+    const channelId = interaction.channel_id || interaction.channel?.id;
+    const guildId = interaction.guild_id;
+    const guildName = interaction.guild?.name || guildId;
+    const userId = interaction.member?.user?.id || interaction.user?.id;
+
+    if (!channelId || !guildId) {
+        return Response.json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+                content: '❌ 此指令只能在伺服器頻道中使用',
+                flags: InteractionResponseFlags.EPHEMERAL,
+            },
+        });
+    }
+
+    try {
+        // 查詢頻道名稱（透過 Discord API）
+        let channelName = channelId;
+        try {
+            const chRes = await fetch(`https://discord.com/api/v10/channels/${channelId}`, {
+                headers: { Authorization: `Bot ${env.DISCORD_TOKEN}` },
+            });
+            if (chRes.ok) {
+                const chData = await chRes.json();
+                channelName = chData.name || channelId;
+            }
+        } catch (_) { }
+
+        await env.DB.prepare(
+            `INSERT INTO sync_channels (guild_id, guild_name, channel_id, channel_name, added_by)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (channel_id) DO UPDATE SET
+         guild_name = excluded.guild_name,
+         channel_name = excluded.channel_name,
+         added_by = excluded.added_by,
+         added_at = datetime('now')`
+        )
+            .bind(guildId, guildName, channelId, channelName, userId)
+            .run();
+
+        // 查詢目前所有同步頻道
+        const allChannels = await env.DB.prepare(
+            'SELECT guild_name, channel_name, channel_id FROM sync_channels ORDER BY added_at ASC'
+        ).all();
+
+        const channelList = allChannels.results
+            .map((c) => `• **${c.guild_name}** #${c.channel_name}`)
+            .join('\n');
+
+        return Response.json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+                embeds: [
+                    {
+                        title: '✅ 同步頻道已設定',
+                        description: `已將 <#${channelId}> 加入 Minecraft 聊天同步。\n\n**目前同步頻道：**\n${channelList}`,
+                        color: 0x00ff00,
+                    },
+                ],
+            },
+        });
+    } catch (err) {
+        console.error('Failed to set channel:', err);
+        return Response.json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+                content: '❌ 設定失敗，請稍後再試',
+                flags: InteractionResponseFlags.EPHEMERAL,
+            },
+        });
+    }
+}
+
+// /removechannel — 移除目前頻道的 MC 聊天同步
+async function handleRemoveChannelCommand(interaction, env) {
+    const channelId = interaction.channel_id || interaction.channel?.id;
+
+    if (!channelId) {
+        return Response.json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+                content: '❌ 此指令只能在伺服器頻道中使用',
+                flags: InteractionResponseFlags.EPHEMERAL,
+            },
+        });
+    }
+
+    try {
+        const existing = await env.DB.prepare(
+            'SELECT * FROM sync_channels WHERE channel_id = ?'
+        )
+            .bind(channelId)
+            .first();
+
+        if (!existing) {
+            return Response.json({
+                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: {
+                    content: '⚠️ 此頻道尚未設定為同步頻道',
+                    flags: InteractionResponseFlags.EPHEMERAL,
+                },
+            });
+        }
+
+        await env.DB.prepare('DELETE FROM sync_channels WHERE channel_id = ?')
+            .bind(channelId)
+            .run();
+
+        // 查詢剩餘同步頻道
+        const remaining = await env.DB.prepare(
+            'SELECT guild_name, channel_name FROM sync_channels ORDER BY added_at ASC'
+        ).all();
+
+        const channelList =
+            remaining.results.length > 0
+                ? remaining.results.map((c) => `• **${c.guild_name}** #${c.channel_name}`).join('\n')
+                : '*(無)*';
+
+        return Response.json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+                embeds: [
+                    {
+                        title: '🗑️ 同步頻道已移除',
+                        description: `已將 <#${channelId}> 從 Minecraft 聊天同步中移除。\n\n**剩餘同步頻道：**\n${channelList}`,
+                        color: 0xffa500,
+                    },
+                ],
+            },
+        });
+    } catch (err) {
+        console.error('Failed to remove channel:', err);
+        return Response.json({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+                content: '❌ 移除失敗，請稍後再試',
+                flags: InteractionResponseFlags.EPHEMERAL,
+            },
+        });
+    }
 }

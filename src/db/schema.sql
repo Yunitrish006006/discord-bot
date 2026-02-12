@@ -48,6 +48,20 @@ CREATE TABLE IF NOT EXISTS player_inventory (
 CREATE INDEX IF NOT EXISTS idx_player_inventory_mc_uuid
   ON player_inventory (mc_uuid);
 
+-- 同步頻道（多伺服器 Discord 頻道同步 MC 聊天）
+CREATE TABLE IF NOT EXISTS sync_channels (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id     TEXT NOT NULL,
+  guild_name   TEXT NOT NULL,
+  channel_id   TEXT NOT NULL UNIQUE,
+  channel_name TEXT NOT NULL,
+  added_by     TEXT NOT NULL,      -- Discord user ID
+  added_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_sync_channels_guild
+  ON sync_channels (guild_id);
+
 -- 伺服器設定 KV
 CREATE TABLE IF NOT EXISTS server_settings (
   key        TEXT PRIMARY KEY,

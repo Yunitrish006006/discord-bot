@@ -34,31 +34,52 @@ export async function postChat(request, env) {
       .bind('minecraft', username, message)
       .run();
 
-    // 轉發到 Discord 頻道
-    const discordResponse = await fetch(
-      `https://discord.com/api/v10/channels/${env.DISCORD_CHANNEL_ID}/messages`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bot ${env.DISCORD_TOKEN}`,
-        },
-        body: JSON.stringify({
-          content: `**[MC] ${username}:** ${message}`,
-        }),
+      // 取得所有同步頻道
+      const channels = await env.DB.prepare(
+          'SELECT channel_id FROM sync_channels'
+      ).all();
+
+      const channelIds = channels.results.map((c) => c.channel_id);
+
+      // 如果沒有任何同步頻道，回退到環境變數的預設頻道
+      if (channelIds.length === 0 && env.DISCORD_CHANNEL_ID) {
+          channelIds.push(env.DISCORD_CHANNEL_ID);
       }
+
+      if (channelIds.length === 0) {
+          return Response.json(
+              { success: false, error: 'No sync channels configured' },
+              { status: 400 }
+          );
+      }
+
+      // 同時發送到所有頻道
+      const messageBody = JSON.stringify({
+          content: `**[MC] ${username}:** ${message}`,
+      });
+
+      const results = await Promise.allSettled(
+          channelIds.map((chId) =>
+              fetch(`https://discord.com/api/v10/channels/${chId}/messages`, {
+                  method: 'POST',
+                  headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bot ${env.DISCORD_TOKEN}`,
+                  },
+            body: messageBody,
+        })
+      )
     );
 
-    if (!discordResponse.ok) {
-      const err = await discordResponse.text();
-      console.error('Discord API error:', err);
-      return Response.json(
-        { success: false, error: 'Failed to send to Discord' },
-        { status: 502 }
-      );
+      const failures = results.filter((r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.ok));
+      if (failures.length > 0) {
+          console.error(`Failed to send to ${failures.length}/${channelIds.length} channels`);
     }
 
-    return Response.json({ success: true });
+      return Response.json({
+          success: true,
+          data: { sent: channelIds.length - failures.length, failed: failures.length },
+      });
   } catch (err) {
     console.error('postChat error:', err);
     return Response.json(
