@@ -12,7 +12,7 @@ export async function verifyDiscordRequest(request, env) {
   const isValid =
     signature &&
     timestamp &&
-    (await verifyKey(body, signature, timestamp, env.DISCORD_PUBLIC_KEY));
+    (await verifyKey(body, signature, timestamp, env.DISCORD_PUBLIC_KEY.trim()));
 
   if (!isValid) {
     return { isValid: false };
