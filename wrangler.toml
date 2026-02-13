@@ -3,6 +3,11 @@ name = "mc-discord-bot"
 main = "src/server.js"
 compatibility_date = "2025-01-01"
 
+[vars]
+DISCORD_PUBLIC_KEY = "ac1f4f11ca6cd81a34c6c0159af504a51b864f6450f48287063fe697d90f3536"
+DISCORD_APPLICATION_ID = "1471476372223557664"
+DISCORD_CHANNEL_ID = "1471478683620343830"
+
 # D1 Database binding
 # 執行 `npm run db:create` 後，把回傳的 database_id 填入下方
 [[d1_databases]]

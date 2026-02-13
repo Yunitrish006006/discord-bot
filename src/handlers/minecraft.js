@@ -58,20 +58,32 @@ export async function postChat(request, env) {
           content: `**[MC] ${username}:** ${message}`,
       });
 
+    const token = env.DISCORD_TOKEN.trim();
+
       const results = await Promise.allSettled(
           channelIds.map((chId) =>
               fetch(`https://discord.com/api/v10/channels/${chId}/messages`, {
                   method: 'POST',
                   headers: {
                       'Content-Type': 'application/json',
-                      Authorization: `Bot ${env.DISCORD_TOKEN}`,
+                    Authorization: `Bot ${token}`,
                   },
             body: messageBody,
         })
       )
     );
 
-      const failures = results.filter((r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.ok));
+    const failures = [];
+    for (const [i, r] of results.entries()) {
+      if (r.status === 'rejected') {
+        console.error(`Channel ${channelIds[i]} rejected:`, r.reason);
+        failures.push(r);
+      } else if (!r.value.ok) {
+        const errBody = await r.value.text();
+        console.error(`Channel ${channelIds[i]} HTTP ${r.value.status}:`, errBody);
+        failures.push(r);
+      }
+    }
       if (failures.length > 0) {
           console.error(`Failed to send to ${failures.length}/${channelIds.length} channels`);
     }

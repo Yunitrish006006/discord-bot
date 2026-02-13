@@ -5,7 +5,7 @@
 export function authenticateMinecraft(request, env) {
   const apiKey = request.headers.get('X-API-Key');
 
-  if (!apiKey || apiKey !== env.MINECRAFT_API_KEY) {
+  if (!apiKey || apiKey !== env.MINECRAFT_API_KEY.trim()) {
     return Response.json(
       { success: false, error: 'Unauthorized' },
       { status: 401 }
